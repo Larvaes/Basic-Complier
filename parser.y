@@ -10,7 +10,7 @@
     char* expression(char*, char*, char);
     char* returnValue(char*);
     void movToEdx(char*);
-    void assignValue(char*);
+    void assignValue(char*, char*);
     void printNumber(char*, char);
     void printNewline();
     void printString(char*);
@@ -66,19 +66,22 @@ line: '\n'
     | print ';'                 
     | cond 
     | loop 
+    | exp                       { yyerror("missing \";\" at expression"); yyerrok; }
+    | assign                    { yyerror("missing \";\" at expression"); yyerrok; }
+    | print                     { yyerror("missing \";\" at print"); yyerrok; }
     ;
 
 exp: value                      { if(!expCount){ expCount = 1; movToEdx($1);} $$ = $1; }
-    | exp '+' exp               { expCount = 2; $$ = expression($1, $3, '+');}
+    | exp '+' exp               { expCount = 2; $$ = expression($1, $3, '+'); }
     | exp '-' exp               { expCount = 2; $$ = expression($1, $3, '-'); }
     | exp '*' exp               { expCount = 2; $$ = expression($1, $3, '*'); }
     | exp '/' exp               { expCount = 2; $$ = expression($1, $3, '/'); }
     | exp '%' exp               { expCount = 2; $$ = expression($1, $3, '%'); }
-    | '-' exp  %prec NEG        { expCount = 2; $$ = expression($2, "", 'm'); }
+    | '-' exp  %prec NEG        { expCount = 0; $$ = expression($2, "", 'm'); }
     | '(' exp ')'	            { expCount = 2; $$ = ""; $$ = strConcat($$, $2); }  
     ;
 
-assign: VAR '=' exp             {  assignValue(reg[$1]); if(expCount) expCount = 0; tempVar_ptr = 116;}
+assign: VAR '=' exp             {  assignValue(reg[$1], $3); if(expCount) expCount = 0; tempVar_ptr = 116;}
     ;
 
 print: PRINT '(' printValue ')'
@@ -91,10 +94,10 @@ printValue: printValue '+' printValue
     | STR                       { printString($1); }
     ;
 
-cond: beforeCond input '}'       { endCompare(); compareCount--; }
+cond: beforeCond input '}'       { endCompare(); }
     ;
 
-beforeCond: COMPARE '(' value ',' value ')' '{'         { if(compareCount) yyerror("cannot have compare nest"); startCompare($3, $5); compareCount++; }
+beforeCond: COMPARE '(' value ',' value ')' '{'         { startCompare($3, $5);}
     ;
 
 loop: beforeLoop input '}'       { endLoop($1); }
@@ -204,14 +207,18 @@ void printString(char *str){
 
 
 }
-void assignValue(char *var){
+void assignValue(char *var, char *temp_var){
     var = returnValue(var);
+    temp_var = returnValue(temp_var);
     char *codetemp = "";
-    if(expCount == 1){
+    if(expCount == 1 || *temp_var == '%'){
         codetemp = strConcat(codetemp, "\tmovl %edx, ");
     }
     else{
-        codetemp = strConcat(codetemp, "\tmovl 116(%esp), %eax\n\tmovl %eax, ");
+        codetemp = strConcat(codetemp, "\tmovl ");
+        codetemp = strConcat(codetemp, temp_var);
+        codetemp = strConcat(codetemp, ", %eax\n\t");
+        codetemp = strConcat(codetemp, "movl %eax, ");
     }
     codetemp = strConcat(codetemp, var);
     codemain = strConcat(codemain, codetemp);
