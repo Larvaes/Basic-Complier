@@ -62,8 +62,8 @@ input: line input
 
 line: '\n'
     | exp ';'
-    | assign ';'                { printf("assign"); }
-    | print ';'                 { printf("print"); }
+    | assign ';'                
+    | print ';'                 
     | cond 
     | loop 
     ;
@@ -241,22 +241,34 @@ char* expression(char* first, char* second, char op){
         switch(op){             //output store in %edx
 
             case '+':
-                codetemp = strConcat(codetemp, "add %eax, %edx\n\t");
+                codetemp = strConcat(codetemp, "addl %eax, %edx\n\t");
                 break;
             case '-':
-                codetemp = strConcat(codetemp, "sub %edx, %eax\n\tmovl %eax, %edx\n\t");
+                codetemp = strConcat(codetemp, "subl %edx, %eax\n\tmovl %eax, %edx\n\t");
 
                 break;
             case '*':
-                codetemp = strConcat(codetemp, "mul %eax, %edx\n\t");
+                codetemp = strConcat(codetemp, "imull %eax, %edx\n\t");
 
                 break;
             case '/':
-                codetemp = strConcat(codetemp, "div %eax, %edx");
+                codetemp = strConcat(codetemp, "movl ");
+                codetemp = strConcat(codetemp, first);
+                codetemp = strConcat(codetemp, ", %eax\n\t");
+                codetemp = strConcat(codetemp, "movl %edx, 112(%esp)\n\t");
+                codetemp = strConcat(codetemp, "cltd\n\t");
+                codetemp = strConcat(codetemp, "idivl 112(%esp)\n\t");
+                codetemp = strConcat(codetemp, "movl %eax, %edx\n\t");
 
                 break;
             case '%':
-                codetemp = strConcat(codetemp, "mod %eax, %edx");
+                codetemp = strConcat(codetemp, "movl ");
+                codetemp = strConcat(codetemp, first);
+                codetemp = strConcat(codetemp, ", %eax\n\t");
+                codetemp = strConcat(codetemp, "movl %edx, 112(%esp)\n\t");
+                codetemp = strConcat(codetemp, "cltd\n\t");
+                codetemp = strConcat(codetemp, "idivl 112(%esp)\n\t");
+                //codetemp = strConcat(codetemp, "movl %eax, %edx\n\t");
 
                 break;
         }
