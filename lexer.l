@@ -23,6 +23,8 @@ int getRegID(char*);
 "print"					{ return PRINT; }
 "compare"				{ return COMPARE; }
 "loop"					{ return LOOP; } 
+"break"                 { return BREAK; }
+"continue"              { return CONTINUE; }
 
 "\\n"           { return NEWLINE; }
 [\"]            { return '\"'; }
@@ -47,6 +49,8 @@ L?\"(\\.|[^\\"])*\"     { yylval.strval = strdup(yytext); return STR; }
 
 .                { }
 %%
+
+
 
 
 int getRegID(char *input){          //change input register from a-z to id (0-25)

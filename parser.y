@@ -19,6 +19,8 @@
     void endCompare();
     int startLoop(char*, char*);
     void endLoop(int);
+    void breakLoop();
+    void continueLoop();
     void initReg();
     int varToInt(char*);
     int yylex (void);
@@ -34,6 +36,7 @@
     int loopCount = 0;
     int addressLoop = 130;
     int countLC = 2;
+    int loopNumber = -1;
   //Function, variable predefine and include headerfile
 %}
 /* Bison declarations.  */
@@ -47,7 +50,7 @@
 %type <strval> value exp 
 
 %token NUM STR PRINT COMPARE LOOP END_OF_FILE
-%token NEWLINE VAR
+%token NEWLINE VAR BREAK CONTINUE
 
 %left '='
 %left '+' '-'
@@ -59,15 +62,18 @@ file: input END_OF_FILE     {return;}
     ;
 
 input: line input
+    | error input                { yyerrok; }
     | %empty
     ;
 
 line: '\n'
     | exp ';'
     | assign ';'                
-    | print ';'                 
+    | print ';'   
     | cond 
     | loop 
+    | CONTINUE ';'              { if(loopNumber == -1){ yyerror("cannot use continue outside loop"); YYERROR; } else { continueLoop(); } }
+    | BREAK ';'                 { if(loopNumber == -1){ yyerror("cannot use break outside loop"); YYERROR; } else { breakLoop(); } } 
     | assign                    { yyerror("missing \";\" at statement"); YYERROR; }
     | print                     { yyerror("missing \";\" at print"); YYERROR; }
     ;
@@ -110,10 +116,10 @@ beforeCond: COMPARE '(' exp ',' exp ')' '{'         { startCompare($3, $5);}
     | COMPARE '(' assign ',' assign ')' '{'                 { yyerror("cannot assign in compare"); YYERROR;  }
     ;
 
-loop: beforeLoop input '}'       { endLoop($1); }
+loop: beforeLoop input '}'       { loopNumber--; endLoop($1); }
     ;
 
-beforeLoop: LOOP '(' value ',' value ')' '{'            { $$ = startLoop($3, $5); }
+beforeLoop: LOOP '(' value ',' value ')' '{'            {loopNumber++; $$ = startLoop($3, $5); }
     | LOOP '('  ',' value ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
     | LOOP '(' value ','  ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
     ;
@@ -467,6 +473,34 @@ void endLoop(int loop){
     codetemp = strConcat(codetemp, ", %edx\n\t");
     codetemp = strConcat(codetemp, "cmpl %edx, %eax\n\t");
     codetemp = strConcat(codetemp, "jle loop");
+    codetemp = strConcat(codetemp, strLoopCount);
+
+    codetemp = strConcat(codetemp, "\nextLoop");
+    codetemp = strConcat(codetemp, strLoopCount);
+    codetemp = strConcat(codetemp, ":\n");
+
+    codemain = strConcat(codemain, codetemp);
+    codemain = strConcat(codemain, "\n");
+}
+void breakLoop(){
+
+    char strLoopCount[20];
+    sprintf(strLoopCount, "%d", loopNumber-1);
+
+    char *codetemp = "";
+    codetemp = strConcat(codetemp, "\tjmp extLoop");
+    codetemp = strConcat(codetemp, strLoopCount);
+
+    codemain = strConcat(codemain, codetemp);
+    codemain = strConcat(codemain, "\n");
+
+}
+void continueLoop(){
+    char strLoopCount[20];
+    sprintf(strLoopCount, "%d", loopNumber);
+
+    char *codetemp = "";
+    codetemp = strConcat(codetemp, "\tjmp exLoop");
     codetemp = strConcat(codetemp, strLoopCount);
 
     codemain = strConcat(codemain, codetemp);
