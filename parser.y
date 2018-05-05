@@ -5,6 +5,7 @@
     #include <stdlib.h>
     #include <string.h>
 
+    extern int yylineno;
 
     char* strConcat(char*, char*);
     char* expression(char*, char*, char);
@@ -36,6 +37,7 @@
   //Function, variable predefine and include headerfile
 %}
 /* Bison declarations.  */
+%locations
 %union {
     char * strval;
     int    intval;
@@ -66,9 +68,8 @@ line: '\n'
     | print ';'                 
     | cond 
     | loop 
-    | exp                       { yyerror("missing \";\" at expression"); yyerrok; }
-    | assign                    { yyerror("missing \";\" at expression"); yyerrok; }
-    | print                     { yyerror("missing \";\" at print"); yyerrok; }
+    | assign                    { yyerror("missing \";\" at statement"); YYERROR; }
+    | print                     { yyerror("missing \";\" at print"); YYERROR; }
     ;
 
 exp: value                      { if(!expCount){ expCount = 1; movToEdx($1);} $$ = $1; }
@@ -85,6 +86,8 @@ assign: VAR '=' exp             {  assignValue(reg[$1], $3); if(expCount) expCou
     ;
 
 print: PRINT '(' printValue ')'
+    | PRINT '(' PRINT '(' printValue ')' ')'        { yyerror("cannot have nested print"); YYERROR;  }
+    | PRINT '(' PRINT ')'                           { yyerror("cannot have nested print"); YYERROR;  }
     ;
 
 printValue: printValue '+' printValue
@@ -92,18 +95,27 @@ printValue: printValue '+' printValue
     | VAR                       { printNumber(reg[$1], 'v'); }
     | NEWLINE                   { printNewline(); }
     | STR                       { printString($1); }
+    | assign                    { yyerror("cannot have statement in print"); YYERROR;  }
+    | %empty
     ;
 
 cond: beforeCond input '}'       { endCompare(); }
     ;
 
-beforeCond: COMPARE '(' value ',' value ')' '{'         { startCompare($3, $5);}
+beforeCond: COMPARE '(' exp ',' exp ')' '{'         { startCompare($3, $5);}
+    | COMPARE '('  ',' exp ')' '{'                    { yyerror("incomplete argument"); YYERROR;  }
+    | COMPARE '(' exp ','  ')' '{'                    { yyerror("incomplete argument"); YYERROR;  }
+    | COMPARE '(' assign ',' exp ')' '{'                    { yyerror("cannot assign in compare"); YYERROR;  }
+    | COMPARE '(' exp ',' assign ')' '{'                    { yyerror("cannot assign in compare"); YYERROR;  }
+    | COMPARE '(' assign ',' assign ')' '{'                 { yyerror("cannot assign in compare"); YYERROR;  }
     ;
 
 loop: beforeLoop input '}'       { endLoop($1); }
     ;
 
 beforeLoop: LOOP '(' value ',' value ')' '{'            { $$ = startLoop($3, $5); }
+    | LOOP '('  ',' value ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
+    | LOOP '(' value ','  ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
     ;
 
 value: NUM                  { sprintf(tempInt, "%d", $1); $$ = ""; $$ = strConcat($$,tempInt);}
@@ -463,7 +475,7 @@ void endLoop(int loop){
 
 void yyerror (char const *s)              // error message
 {
-  fprintf (stderr, "%s \n", s);
+  fprintf (stderr, "Error: %s At line %d\n", s, yylineno);
 }
 
 int main(void){

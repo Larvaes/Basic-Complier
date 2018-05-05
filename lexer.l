@@ -1,5 +1,5 @@
 %option noyywrap
-
+%option yylineno
 D			[0-9]
 L			[a-zA-Z_]
 S			[0-9a-zA-Z_ ]
@@ -17,7 +17,8 @@ int getRegID(char*);
 %}
 
 %%
-[ \t]         ;          //detect string and return token to bison
+[\t]         ;          //detect string and return token to bison
+[\n]           ;
 <<EOF>>                 { return END_OF_FILE; }
 "print"					{ return PRINT; }
 "compare"				{ return COMPARE; }
@@ -46,6 +47,7 @@ L?\"(\\.|[^\\"])*\"     { yylval.strval = strdup(yytext); return STR; }
 
 .                { }
 %%
+
 
 int getRegID(char *input){          //change input register from a-z to id (0-25)
     int result = 0;
