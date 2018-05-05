@@ -92,7 +92,7 @@ assign: VAR '=' exp             {  assignValue(reg[$1], $3); if(expCount) expCou
     ;
 
 print: PRINT '(' printValue ')'
-    | PRINT '(' PRINT '(' printValue ')' ')'        { yyerror("cannot have nested print"); YYERROR;  }
+    | PRINT '(' PRINT '(' printValue ')' printValue ')'        { yyerror("cannot have nested print"); YYERROR;  }
     | PRINT '(' PRINT ')'                           { yyerror("cannot have nested print"); YYERROR;  }
     ;
 
@@ -120,15 +120,15 @@ loop: beforeLoop input '}'       { loopNumber--; endLoop($1); }
     ;
 
 beforeLoop: LOOP '(' value ',' value ')' '{'            {loopNumber++; $$ = startLoop($3, $5); }
-    | LOOP '('  ',' value ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
-    | LOOP '(' value ','  ')' '{'                 { yyerror("incomplete argument"); YYERROR;  }
     ;
 
 value: NUM                  { sprintf(tempInt, "%d", $1); $$ = ""; $$ = strConcat($$,tempInt);}
     | VAR                   { $$ = reg[$1]; }
     ;
 %%
-
+// strConcat
+// use for extend and concatenate string by reallocate space 
+// return pointer to character of new string
 char* strConcat(char* first,char* second){
     char* tmp = malloc(strlen(first)+strlen(second)+1);
     strcpy(tmp, first );
@@ -136,6 +136,8 @@ char* strConcat(char* first,char* second){
     return tmp;
 }
 
+// initReg
+// use for initialize reg array for store address offset used in assembly file
 void initReg(){
     char tmp[20];
     for(int i = 0; i < 26; i++){
@@ -143,6 +145,11 @@ void initReg(){
         strcpy(reg[i],tmp);
     }
 }
+
+// varToInt
+// use to convert string begin with v (address) to integer value and 
+// other string to 0
+// return integer
 int varToInt(char *input){
     if(*input == 'v'){
         return(atoi(input+1));
@@ -151,6 +158,12 @@ int varToInt(char *input){
         return(0);
 }
 
+// returnValue
+// use for change string to value that can really use in assembly
+// e.g. v104 (address offset) -> 104(%esp) (esp + 104)
+// e.g. 5 (constant integer) -> $5 (constant in AT&T syntax assembly)
+// e.g. %edx return input
+// return pointer to character of new string
 char* returnValue(char* input){
     if(*input == 'v'){
         input = input + 1;
@@ -166,6 +179,9 @@ char* returnValue(char* input){
         return str;
     }
 }
+
+// movToEdx
+// use for write {mov input to edx register} assembly command
 void movToEdx(char *input){
     input = returnValue(input);
     char *codetemp = "\tmovl ";
@@ -174,6 +190,9 @@ void movToEdx(char *input){
     codemain = strConcat(codemain, codetemp);
     codemain = strConcat(codemain, "\n");
 }
+
+// printNumber
+// use for write assembly instruction set for print integer (input) on screen
 void printNumber(char *input, char type){
     char *codetemp = "\tmovl ";
 
@@ -194,12 +213,17 @@ void printNumber(char *input, char type){
     
     codemain = strConcat(codemain, codetemp);
 }
+// printNewLine
+// use for write assembly instruction set for print newline (\n) on screen
 void printNewline(){
    
     char *codetemp = "\tmovl $.LC0, (%esp)\n\tcall printf";
     codemain = strConcat(codemain, codetemp);
     codemain = strConcat(codemain, "\n");
 }
+
+// printString
+// use for write assembly instruction set for print string (input) on screen
 void printString(char *str){
 
     //data
@@ -225,6 +249,10 @@ void printString(char *str){
 
 
 }
+
+// assignValue
+// use for write assembly instruction set for assign value ("=") 
+// to selected address (offset(%esp))
 void assignValue(char *var, char *temp_var){
     var = returnValue(var);
     temp_var = returnValue(temp_var);
@@ -243,7 +271,12 @@ void assignValue(char *var, char *temp_var){
     codemain = strConcat(codemain, "\n\n");
 }
 
-
+// expression
+// use for write assembly instruction set to perform 
+// selected expression (+, -, *, /, %) to input (variable or constant)
+// if more than one expression is detected in the same 
+// output will be stored in temporary variable (offset 116, 120, 124(%esp))
+// return pointer to character of current temporary varible
 char* expression(char* first, char* second, char op){
     int tempFirst = varToInt(first);
     int tempSecond = varToInt(second);
@@ -328,6 +361,9 @@ char* expression(char* first, char* second, char op){
         else if(tempFirst == 0 && tempSecond == 124){
             codetemp = strConcat(codetemp, "movl %edx, 124(%esp)\n\t"); 
         }
+        else{
+            codetemp = strConcat(codetemp, "movl %edx, 116(%esp)\n\t");
+        }
 
         codemain = strConcat(codemain, codetemp);
         codemain = strConcat(codemain, "\n");
@@ -364,12 +400,16 @@ char* expression(char* first, char* second, char op){
 			return "v124";
         }
         else{
-            return "v120";
+            return "v116";
         }
         
 
     }
 }
+
+// stratCompare
+// use for write assembly instruction set for head of compare block {}
+// comment: similiar but simplier for if in C instruction 
 void startCompare(char *first, char *second){
     first = returnValue(first);
     second = returnValue(second);
@@ -389,6 +429,9 @@ void startCompare(char *first, char *second){
     codemain = strConcat(codemain, "\n");
     
 }
+
+// endCompare
+// use for write assembly instruction set for end of compare block {}
 void endCompare(){
     char strCompareNum[20];
     sprintf(strCompareNum,"%d",compareNum);
@@ -401,6 +444,10 @@ void endCompare(){
     
     compareNum++;
 }
+
+// stratLoop
+// use for write assembly instruction set for head of loop block {}
+// comment: similiar but simplier for for loop in C instruction 
 int startLoop(char *first, char *second){
     first = returnValue(first);
     second = returnValue(second);
@@ -441,6 +488,10 @@ int startLoop(char *first, char *second){
     loopCount++;
     return loopCount - 1;
 }
+
+// endLoop
+// use for write assembly instruction set for end of loop block {}
+// e.g. compare condition and jump back to head and something like that 
 void endLoop(int loop){
     addressLoop = addressLoop - 8;
     char addFirst[20];
@@ -482,11 +533,13 @@ void endLoop(int loop){
     codemain = strConcat(codemain, codetemp);
     codemain = strConcat(codemain, "\n");
 }
+
+// breakLoop
+// use for write assembly instruction set break out of loop block {}
 void breakLoop(){
 
     char strLoopCount[20];
-    sprintf(strLoopCount, "%d", loopNumber-1);
-
+    sprintf(strLoopCount, "%d", loopNumber);
     char *codetemp = "";
     codetemp = strConcat(codetemp, "\tjmp extLoop");
     codetemp = strConcat(codetemp, strLoopCount);
@@ -495,6 +548,10 @@ void breakLoop(){
     codemain = strConcat(codemain, "\n");
 
 }
+
+// continueLoop
+// use for write assembly instruction set continue on loop block {}
+// skip instruction under "continue" and begin new loop
 void continueLoop(){
     char strLoopCount[20];
     sprintf(strLoopCount, "%d", loopNumber);
@@ -516,6 +573,7 @@ int main(void){
     initReg();
     yyparse();                        // strat parser
     char *codetemp = "";
+    // head of assembly file before main function
     codetemp = strConcat(codetemp, "\n\t.section    .rodata\n");
     codetemp = strConcat(codetemp, ".LC0:\n\t");
     codetemp = strConcat(codetemp, ".string \"\\n\\0\"\n");
@@ -531,6 +589,7 @@ int main(void){
 
     codetemp = strConcat(codetemp, codemain);
 
+    // end of assembly file after main function
     codetemp = strConcat(codetemp, "\tleave\n\t.cfi_restore 5\n\t.cfi_def_cfa 4, 4\n\tret\n\t.cfi_endproc\n");
     codetemp = strConcat(codetemp, ".LFE0:\n\t.size	main, .-main\n\t");
     codetemp = strConcat(codetemp, ".ident	\"GCC: (Ubuntu 5.4.0-6ubuntu1~16.04.9) 5.4.0 20160609\"\n\t");
